@@ -1,3 +1,4 @@
+
 export enum UserRole {
   PARTNER = 'PARTNER',
   CONTRIBUTOR = 'CONTRIBUTOR'
@@ -40,6 +41,7 @@ export interface Feedback {
   commitment?: string; // "O que se compromete a fazer"
   learning?: string; // "Principal aprendizado"
   commitmentCompleted?: boolean;
+  timestamp?: string; // Date string for display "Segunda-feira 09/02/26 14h27"
 }
 
 export interface User {

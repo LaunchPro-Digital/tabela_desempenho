@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppState, Feedback, UserRole } from '../types';
 import { calculateMetricStatus, getStatusColor } from '../services/calculator';
-import { CheckSquare, MessageSquare, History, ChevronLeft, Save } from 'lucide-react';
+import { CheckSquare, MessageSquare, History, ChevronLeft, Save, Check, Clock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface OneOnOneProps {
@@ -19,12 +19,16 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
     learning: '',
     commitment: ''
   });
+  const [lastSavedMessage, setLastSavedMessage] = useState<string | null>(null);
 
   // Load existing feedback if present
   useEffect(() => {
     const existing = appState.feedback[user.id]?.find(f => f.week === appState.currentWeek);
     if (existing) {
         setFeedback(existing);
+        if (existing.timestamp) {
+            setLastSavedMessage(existing.timestamp);
+        }
     }
   }, [user.id, appState.currentWeek, appState.feedback]);
 
@@ -35,14 +39,31 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
   const lastCommitment = previousFeedback.find(f => f.week === appState.currentWeek - 1);
 
   const handleFeedbackSubmit = () => {
+     const now = new Date();
+     const options: Intl.DateTimeFormatOptions = { 
+        weekday: 'long', 
+        year: '2-digit', 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+     };
+     // Format: "Segunda-feira, 09/02/26 14:27" -> Adjusting to "Segunda-feira 09/02/26 14h27" style
+     let formatted = now.toLocaleDateString('pt-BR', options);
+     formatted = formatted.charAt(0).toUpperCase() + formatted.slice(1); // Capitalize first letter
+     formatted = formatted.replace(',', '').replace(':', 'h');
+     
+     const timestampStr = `Alinhamento Registrado | ${formatted}`;
+
      onSaveFeedback({
         week: appState.currentWeek,
         blockers: feedback.blockers,
         commitment: feedback.commitment,
         learning: feedback.learning,
-        commitmentCompleted: false // Logic to toggle this could be added
+        commitmentCompleted: false, // Logic to toggle this could be added
+        timestamp: timestampStr
     });
-    alert("Registro atualizado com sucesso.");
+    setLastSavedMessage(timestampStr);
   };
 
   // Prepare chart data for first metric (Primary KPI)
@@ -153,7 +174,12 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
                                 <input type="checkbox" className="mt-1 w-5 h-5 accent-brand-green rounded cursor-pointer" />
                                 <div>
                                     <p className="text-brand-black dark:text-white font-medium leading-snug">{lastCommitment.commitment}</p>
-                                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Semana {appState.currentWeek - 1}</p>
+                                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-2 flex items-center gap-1">
+                                        Semana {appState.currentWeek - 1}
+                                        {lastCommitment.timestamp && (
+                                           <span title={lastCommitment.timestamp}>• {lastCommitment.timestamp.split('|')[1]}</span> 
+                                        )}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -219,10 +245,18 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
                         </div>
                     </div>
 
-                    <div className="flex justify-end pt-2">
+                    <div className="flex flex-col md:flex-row items-end md:items-center justify-between pt-2 gap-4">
+                        <div className="order-2 md:order-1">
+                            {lastSavedMessage && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-brand-green animate-fade-in bg-brand-green/5 px-3 py-2 rounded-lg border border-brand-green/10">
+                                    <Check size={14} />
+                                    {lastSavedMessage}
+                                </div>
+                            )}
+                        </div>
                         <button 
                             onClick={handleFeedbackSubmit}
-                            className="bg-brand-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-brand-black font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
+                            className="order-1 md:order-2 bg-brand-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-brand-black font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
                         >
                             <Save size={18} /> Salvar Alinhamento
                         </button>

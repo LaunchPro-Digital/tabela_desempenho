@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, AppState } from './types';
+import { User, UserRole, AppState, Feedback } from './types';
 import { INITIAL_STATE } from './constants';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
@@ -81,6 +81,22 @@ const App: React.FC = () => {
     });
   };
 
+  const handleSaveFeedback = (userId: string, feedback: Feedback) => {
+      setAppState(prev => {
+          const userFeedbacks = prev.feedback[userId] || [];
+          // Remove existing feedback for this week if any, to overwrite
+          const otherFeedbacks = userFeedbacks.filter(f => f.week !== feedback.week);
+          
+          return {
+              ...prev,
+              feedback: {
+                  ...prev.feedback,
+                  [userId]: [...otherFeedbacks, feedback]
+              }
+          };
+      });
+  };
+
   const handleUpdateUsers = (updatedUsers: User[]) => {
       setAppState(prev => ({
           ...prev,
@@ -160,6 +176,7 @@ const App: React.FC = () => {
             currentUser={user}
             onUpdateEntry={handleUpdateEntry}
             onUpdateUsers={handleUpdateUsers}
+            onSaveFeedback={handleSaveFeedback}
             onThemeToggle={toggleTheme}
             isDarkMode={isDarkMode}
         />

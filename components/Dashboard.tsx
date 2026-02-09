@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { User, AppState, UserRole, Metric } from '../types';
+import { User, AppState, UserRole, Metric, Feedback } from '../types';
 import { calculateMetricStatus, getStatusColor, calculateWeeklyValue } from '../services/calculator';
-import { Users, BarChart3, ChevronRight, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink } from 'lucide-react';
+import { Users, BarChart3, ChevronRight, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink, Clock } from 'lucide-react';
 import OneOnOne from './OneOnOne';
 import AdminPanel from './AdminPanel';
 
@@ -11,11 +11,12 @@ interface DashboardProps {
   currentUser: User;
   onUpdateEntry: (userId: string, week: number, metricId: string, inputs: any) => void;
   onUpdateUsers: (users: User[]) => void;
+  onSaveFeedback: (userId: string, feedback: Feedback) => void;
   onThemeToggle: () => void;
   isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, onUpdateEntry, onUpdateUsers, onThemeToggle, isDarkMode }) => {
+const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, onUpdateEntry, onUpdateUsers, onSaveFeedback, onThemeToggle, isDarkMode }) => {
   const [selectedUserFor1on1, setSelectedUserFor1on1] = useState<User | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [editingCell, setEditingCell] = useState<{userId: string, week: number, metric: Metric, currentInputs: any} | null>(null);
@@ -52,7 +53,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
       <OneOnOne 
         user={selectedUserFor1on1} 
         appState={appState} 
-        onSaveFeedback={() => {}} 
+        onSaveFeedback={(fb) => onSaveFeedback(selectedUserFor1on1.id, fb)} 
         onClose={() => setSelectedUserFor1on1(null)} 
         currentUser={currentUser}
       />
@@ -254,7 +255,16 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                                 <img src={u.avatar} className="w-10 h-10 rounded-full border border-gray-100 dark:border-slate-700" />
                                 <div>
                                     <p className="font-bold text-brand-black dark:text-white text-sm">{u.name}</p>
-                                    <p className="text-[10px] text-brand-grey dark:text-slate-500 uppercase">Semana {latestFeedback.week}</p>
+                                    <div className="flex items-center gap-1.5 text-[10px] text-brand-grey dark:text-slate-500 uppercase">
+                                        <span>Semana {latestFeedback.week}</span>
+                                        {latestFeedback.timestamp && (
+                                            <>
+                                                <span>•</span>
+                                                <Clock size={10} />
+                                                <span className="truncate max-w-[80px]" title={latestFeedback.timestamp}>{latestFeedback.timestamp.split('|')[1]?.trim() || 'Recente'}</span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             

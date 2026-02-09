@@ -5,29 +5,56 @@ import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CheckIn from './components/CheckIn';
 
+const APP_STORAGE_KEY = 'ordus_app_state_v1';
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
+  
+  // Initialize state from LocalStorage if available, otherwise use INITIAL_STATE
+  const [appState, setAppState] = useState<AppState>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(APP_STORAGE_KEY);
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse app state from local storage", e);
+        }
+      }
+    }
+    return INITIAL_STATE;
+  });
+
   const [viewMode, setViewMode] = useState<'checkin' | 'dashboard'>('checkin');
   const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Initialize Theme
   useEffect(() => {
     if (typeof window !== 'undefined') {
-        if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        const savedTheme = localStorage.getItem('ordus_theme');
+        if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             setIsDarkMode(true);
             document.documentElement.classList.add('dark');
         }
     }
   }, []);
 
+  // Save AppState to LocalStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(appState));
+    }
+  }, [appState]);
+
   const toggleTheme = () => {
       setIsDarkMode(prev => {
           const newVal = !prev;
           if (newVal) {
               document.documentElement.classList.add('dark');
+              localStorage.setItem('ordus_theme', 'dark');
           } else {
               document.documentElement.classList.remove('dark');
+              localStorage.setItem('ordus_theme', 'light');
           }
           return newVal;
       });

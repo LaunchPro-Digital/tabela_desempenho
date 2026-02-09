@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, AppState, UserRole, Metric } from '../types';
-import { calculateMetricStatus, getStatusColor } from '../services/calculator';
+import { calculateMetricStatus, getStatusColor, calculateWeeklyValue } from '../services/calculator';
 import { Users, BarChart3, ChevronRight, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink } from 'lucide-react';
 import OneOnOne from './OneOnOne';
 import AdminPanel from './AdminPanel';
@@ -179,9 +179,11 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                                             {Array.from({length: 13}, (_, i) => i + 1).map(week => {
                                                 const entry = userEntries.find(e => e.week === week && e.inputs.metricId === metric.id);
                                                 let displayVal = '-';
+                                                
                                                 if (entry) {
-                                                    const rawVals = Object.values(entry.inputs).filter(v => typeof v === 'number');
-                                                    if(rawVals.length > 0) displayVal = String(rawVals[0]); 
+                                                    // Calculate the weekly value for display (e.g., %)
+                                                    const val = calculateWeeklyValue(metric, entry);
+                                                    displayVal = String(Math.round(val));
                                                 }
 
                                                 const isEditable = currentUser.role === UserRole.PARTNER && week <= appState.currentWeek;
@@ -296,7 +298,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                                 <input 
                                     type="number" 
                                     className="w-full border border-gray-300 dark:border-brand-darkBorder rounded-lg p-3 text-lg font-medium focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 bg-white dark:bg-slate-900 text-brand-black dark:text-white outline-none transition-all"
-                                    value={editForm[inp.key] || ''}
+                                    value={editForm[inp.key] !== undefined ? editForm[inp.key] : ''}
                                     onChange={e => setEditForm({...editForm, [inp.key]: parseFloat(e.target.value)})}
                                     autoFocus={editingCell.metric.inputs.indexOf(inp) === 0}
                                 />

@@ -1,5 +1,39 @@
 import { Metric, MetricType, WeeklyData } from '../types';
 
+export const calculateWeeklyValue = (metric: Metric, entry: WeeklyData): number => {
+    if (!entry || !entry.inputs) return 0;
+
+    switch (metric.type) {
+        case MetricType.PERCENTAGE_CUMULATIVE: {
+            // Assumes Input[0] is Total/Denominator and Input[1] is Success/Numerator based on app convention
+            if (metric.inputs.length < 2) return 0;
+            const totalKey = metric.inputs[0].key;
+            const successKey = metric.inputs[1].key;
+            
+            const total = (entry.inputs[totalKey] as number) || 0;
+            const success = (entry.inputs[successKey] as number) || 0;
+
+            if (total === 0) return 0;
+            return (success / total) * 100;
+        }
+        case MetricType.SUM_TARGET: {
+            // Sum of inputs for that week (usually just one input)
+            if (metric.inputs.length === 0) return 0;
+            const valKey = metric.inputs[0].key;
+            return (entry.inputs[valKey] as number) || 0;
+        }
+        case MetricType.PERCENTAGE_AVERAGE:
+        case MetricType.MAX_LIMIT: {
+             // Usually represents the value itself (e.g. NPS score or Days)
+             if (metric.inputs.length === 0) return 0;
+             const valKey = metric.inputs[0].key;
+             return (entry.inputs[valKey] as number) || 0;
+        }
+        default:
+            return 0;
+    }
+};
+
 export const calculateMetricStatus = (metric: Metric, entries: WeeklyData[]) => {
   // Filter entries for this specific metric
   const metricEntries = entries.filter(e => e.inputs.metricId === metric.id);

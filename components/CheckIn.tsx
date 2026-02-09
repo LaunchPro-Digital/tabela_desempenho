@@ -29,9 +29,17 @@ const CheckIn: React.FC<CheckInProps> = ({ user, currentWeek, onSave, appState, 
   const activeMetric = user.metrics[activeMetricIndex];
 
   const handleInputChange = (key: string, value: string) => {
+    // If empty string, keep it as empty so input can be cleared
+    if (value === '') {
+        const newState = { ...formState };
+        delete newState[key];
+        setFormState(newState);
+        return;
+    }
+    
     setFormState(prev => ({
       ...prev,
-      [key]: parseFloat(value) || 0
+      [key]: parseFloat(value)
     }));
   };
 
@@ -118,7 +126,7 @@ const CheckIn: React.FC<CheckInProps> = ({ user, currentWeek, onSave, appState, 
               </label>
               <input
                 type="number"
-                value={formState[input.key] || ''}
+                value={formState[input.key] !== undefined ? formState[input.key] : ''}
                 onChange={(e) => handleInputChange(input.key, e.target.value)}
                 className="w-full px-4 py-4 rounded-xl border border-gray-300 dark:border-brand-darkBorder bg-white dark:bg-slate-900 focus:border-brand-purple dark:focus:border-brand-purple focus:ring-4 focus:ring-brand-purple/10 transition-all text-xl font-medium text-brand-black dark:text-white outline-none"
                 placeholder={input.placeholder || "0"}

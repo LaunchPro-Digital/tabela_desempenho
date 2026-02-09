@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Lock, User as UserIcon, ArrowRight, AlertCircle, Moon, Sun, KeyRound, X, Check } from 'lucide-react';
+import { Lock, User as UserIcon, ArrowRight, AlertCircle, Moon, Sun, KeyRound, X, Check, Search } from 'lucide-react';
 
 interface LoginProps {
   users: User[];
@@ -19,6 +19,8 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, onThemeToggle, isDarkMode
   // Recovery State
   const [recoveryUser, setRecoveryUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [recoverySearchName, setRecoverySearchName] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,12 +38,44 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, onThemeToggle, isDarkMode
     }
   };
 
+  const handleOpenRecovery = () => {
+    const found = users.find(u => u.name.toLowerCase() === username.toLowerCase());
+    setRecoveryError('');
+    if (found) {
+        setRecoveryUser(found);
+    } else {
+        setRecoverySearchName(username); // Pre-fill with what they typed
+        setRecoveryUser(null);
+    }
+    setNewPassword('');
+    setShowRecovery(true);
+  };
+
+  const handleSearchUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError('');
+    
+    if (!recoverySearchName.trim()) {
+        setRecoveryError('Por favor, digite um nome.');
+        return;
+    }
+
+    const found = users.find(u => u.name.toLowerCase() === recoverySearchName.toLowerCase());
+    if (found) {
+        setRecoveryUser(found);
+    } else {
+        setRecoveryError('Usuário não encontrado. Digite um nome válido.');
+    }
+  };
+
   const handleRecoverySubmit = () => {
     if (recoveryUser && newPassword) {
         onResetPassword(recoveryUser.id, newPassword);
         setShowRecovery(false);
         setRecoveryUser(null);
         setNewPassword('');
+        setRecoverySearchName('');
+        setRecoveryError('');
         alert(`Senha alterada com sucesso! Agora você pode entrar como ${recoveryUser.name}.`);
     }
   };
@@ -109,7 +143,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, onThemeToggle, isDarkMode
                         <label className="text-xs font-bold text-brand-grey dark:text-slate-400 uppercase">Senha de Acesso</label>
                         <button 
                             type="button" 
-                            onClick={() => setShowRecovery(true)}
+                            onClick={handleOpenRecovery}
                             className="text-xs text-brand-purple hover:text-brand-purpleDark underline"
                         >
                             Esqueci minha senha
@@ -165,25 +199,38 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, onThemeToggle, isDarkMode
                   <div className="p-6">
                       {!recoveryUser ? (
                           <div className="space-y-4">
-                              <p className="text-sm text-brand-grey dark:text-slate-300 mb-2">Selecione seu usuário para redefinir a senha:</p>
-                              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                                  {users.map(u => (
-                                      <button 
-                                          key={u.id}
-                                          onClick={() => setRecoveryUser(u)}
-                                          className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 border border-transparent hover:border-brand-purple/30 transition-all text-left group"
-                                      >
-                                          <img src={u.avatar} className="w-8 h-8 rounded-full border border-gray-200 dark:border-slate-600" />
-                                          <div>
-                                              <p className="text-sm font-bold text-brand-black dark:text-white group-hover:text-brand-purple">{u.name}</p>
-                                              <p className="text-[10px] text-brand-grey dark:text-slate-500 uppercase">{u.roleTitle}</p>
-                                          </div>
-                                      </button>
-                                  ))}
-                              </div>
+                              <p className="text-sm text-brand-grey dark:text-slate-300 mb-2">Informe seu nome para continuar:</p>
+                              <form onSubmit={handleSearchUser} className="relative group">
+                                  <UserIcon className="absolute left-3 top-3.5 text-brand-grey dark:text-slate-500 group-focus-within:text-brand-purple transition-colors" size={18} />
+                                  <input 
+                                      type="text" 
+                                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-brand-darkBorder bg-gray-50 dark:bg-slate-800/50 focus:bg-white dark:focus:bg-slate-800 focus:border-brand-purple dark:focus:border-brand-purple focus:ring-2 focus:ring-brand-purple/20 outline-none transition-all font-medium text-brand-black dark:text-white"
+                                      placeholder="Seu nome..."
+                                      value={recoverySearchName}
+                                      onChange={(e) => {
+                                          setRecoverySearchName(e.target.value);
+                                          setRecoveryError('');
+                                      }}
+                                      autoFocus
+                                  />
+                                  
+                                  {recoveryError && (
+                                    <div className="flex items-center gap-2 text-xs text-red-500 bg-red-50 dark:bg-red-900/20 dark:text-red-300 p-3 rounded-lg border border-red-100 dark:border-red-900/30 mt-3 animate-fade-in">
+                                        <AlertCircle size={14} />
+                                        {recoveryError}
+                                    </div>
+                                  )}
+
+                                  <button 
+                                      type="submit"
+                                      className="w-full mt-3 bg-brand-black dark:bg-brand-offWhite text-white dark:text-brand-black font-bold py-3 rounded-xl flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                                  >
+                                      <Search size={18} /> Buscar Usuário
+                                  </button>
+                              </form>
                           </div>
                       ) : (
-                          <div className="space-y-4">
+                          <div className="space-y-4 animate-fade-in">
                               <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                   <img src={recoveryUser.avatar} className="w-10 h-10 rounded-full" />
                                   <div>

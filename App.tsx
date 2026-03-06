@@ -1,32 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, AppState, Feedback } from './types';
-import { INITIAL_STATE } from './constants';
+import { User, UserRole, Feedback } from './types';
+import { useAppState } from './hooks/useAppState';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import CheckIn from './components/CheckIn';
 
-const APP_STORAGE_KEY = 'ordus_app_state_v1';
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  
-  // Initialize state from LocalStorage if available, otherwise use INITIAL_STATE
-  const [appState, setAppState] = useState<AppState>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(APP_STORAGE_KEY);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {
-          console.error("Failed to parse app state from local storage", e);
-        }
-      }
-    }
-    return INITIAL_STATE;
-  });
-
   const [viewMode, setViewMode] = useState<'checkin' | 'dashboard'>('checkin');
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  const {
+    appState,
+    loading,
+    updateEntry,
+    saveFeedback,
+    updateUsers,
+    resetPassword,
+  } = useAppState();
 
   // Initialize Theme
   useEffect(() => {
@@ -38,13 +29,6 @@ const App: React.FC = () => {
         }
     }
   }, []);
-
-  // Save AppState to LocalStorage whenever it changes
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(appState));
-    }
-  }, [appState]);
 
   const toggleTheme = () => {
       setIsDarkMode(prev => {
@@ -70,70 +54,40 @@ const App: React.FC = () => {
   };
 
   const handleResetPassword = (userId: string, newPass: string) => {
-      setAppState(prev => {
-          const updatedUsers = prev.users.map(u => {
-              if (u.id === userId) {
-                  return { ...u, password: newPass };
-              }
-              return u;
-          });
-          return { ...prev, users: updatedUsers };
-      });
+      resetPassword(userId, newPass);
   };
 
   const handleSaveMetric = (metricId: string, inputs: any) => {
     if (!user) return;
-    handleUpdateEntry(user.id, appState.currentWeek, metricId, inputs);
+    updateEntry(user.id, appState.currentWeek, metricId, inputs);
   };
 
   const handleUpdateEntry = (userId: string, week: number, metricId: string, inputs: any) => {
-    setAppState(prev => {
-        const existingEntries = prev.entries[userId] || [];
-        const filtered = existingEntries.filter(e => !(e.week === week && e.inputs.metricId === metricId));
-        
-        const newEntry = {
-            week: week,
-            inputs: inputs,
-            calculatedValue: 0,
-            timestamp: new Date().toISOString()
-        };
-
-        return {
-            ...prev,
-            entries: {
-                ...prev.entries,
-                [userId]: [...filtered, newEntry]
-            }
-        };
-    });
+    updateEntry(userId, week, metricId, inputs);
   };
 
   const handleSaveFeedback = (userId: string, feedback: Feedback) => {
-      setAppState(prev => {
-          const userFeedbacks = prev.feedback[userId] || [];
-          // Remove existing feedback for this week if any, to overwrite
-          const otherFeedbacks = userFeedbacks.filter(f => f.week !== feedback.week);
-          
-          return {
-              ...prev,
-              feedback: {
-                  ...prev.feedback,
-                  [userId]: [...otherFeedbacks, feedback]
-              }
-          };
-      });
+      saveFeedback(userId, feedback);
   };
 
   const handleUpdateUsers = (updatedUsers: User[]) => {
-      setAppState(prev => ({
-          ...prev,
-          users: updatedUsers
-      }));
+      updateUsers(updatedUsers);
       if (user) {
           const freshUser = updatedUsers.find(u => u.id === user.id);
           if (freshUser) setUser(freshUser);
       }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-brand-grey dark:text-slate-400 font-medium">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { User, UserRole, Feedback } from './types';
 import { useAppState } from './hooks/useAppState';
 import { supabase, signIn, signOut, updatePassword } from './supabaseClient';
 import Login from './components/Login';
-import ChangePassword from './components/ChangePassword';
-import ChangePasswordModal from './components/ChangePasswordModal';
-import Dashboard from './components/Dashboard';
-import CheckIn from './components/CheckIn';
+
+// Lazy-loaded components (code splitting)
+const ChangePassword = React.lazy(() => import('./components/ChangePassword'));
+const ChangePasswordModal = React.lazy(() => import('./components/ChangePasswordModal'));
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const CheckIn = React.lazy(() => import('./components/CheckIn'));
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -24,7 +26,11 @@ const App: React.FC = () => {
     updateEntry,
     saveFeedback,
     updateUsers,
-  } = useAppState(isAuthenticated);
+  } = useAppState({
+    enabled: isAuthenticated,
+    userId: user?.id,
+    userRole: user?.role as UserRole | undefined,
+  });
 
   // Initialize Theme
   useEffect(() => {
@@ -179,19 +185,16 @@ const App: React.FC = () => {
       }
   }, [updateUsers, user]);
 
-  // Loading states
-  if (authLoading || loading) {
+  // Auth still resolving - lightweight spinner
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-brand-grey dark:text-slate-400 font-medium">Carregando dados...</p>
-        </div>
+        <div className="w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  // Not authenticated
+  // Not authenticated - show Login immediately (no waiting for data)
   if (!user) {
     return (
         <Login
@@ -202,14 +205,34 @@ const App: React.FC = () => {
     );
   }
 
+  // Data loading after authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-brand-grey dark:text-slate-400 font-medium">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const suspenseFallback = (
+    <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-brand-purple border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
   // First access - needs password change
   if (needsPasswordChange) {
     return (
-      <ChangePassword
-        user={user}
-        onPasswordChanged={handlePasswordChanged}
-        onChangePassword={handleChangePassword}
-      />
+      <Suspense fallback={suspenseFallback}>
+        <ChangePassword
+          user={user}
+          onPasswordChanged={handlePasswordChanged}
+          onChangePassword={handleChangePassword}
+        />
+      </Suspense>
     );
   }
 
@@ -227,7 +250,7 @@ const App: React.FC = () => {
                             <span className="block text-sm font-bold text-brand-black dark:text-white">{user.name}</span>
                             <span className="block text-xs text-brand-grey dark:text-slate-400">{user.roleTitle}</span>
                         </div>
-                        <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-sm" />
+                        <img src={user.avatar} loading="lazy" className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-sm" />
                         {user.role === UserRole.PARTNER && (
                             <button
                                 onClick={() => setViewMode('dashboard')}
@@ -246,19 +269,23 @@ const App: React.FC = () => {
                   </div>
               </header>
               {showChangePasswordModal && (
-                <ChangePasswordModal
-                  onClose={() => setShowChangePasswordModal(false)}
-                  onChangePassword={handleChangePassword}
-                />
+                <Suspense fallback={null}>
+                  <ChangePasswordModal
+                    onClose={() => setShowChangePasswordModal(false)}
+                    onChangePassword={handleChangePassword}
+                  />
+                </Suspense>
               )}
-              <CheckIn
-                user={user}
-                currentWeek={appState.currentWeek}
-                onSave={handleSaveMetric}
-                appState={appState}
-                onThemeToggle={toggleTheme}
-                isDarkMode={isDarkMode}
-              />
+              <Suspense fallback={suspenseFallback}>
+                <CheckIn
+                  user={user}
+                  currentWeek={appState.currentWeek}
+                  onSave={handleSaveMetric}
+                  appState={appState}
+                  onThemeToggle={toggleTheme}
+                  isDarkMode={isDarkMode}
+                />
+              </Suspense>
           </div>
       );
   }
@@ -282,21 +309,25 @@ const App: React.FC = () => {
             </button>
         </div>
         {showChangePasswordModal && (
-          <ChangePasswordModal
-            onClose={() => setShowChangePasswordModal(false)}
-            onChangePassword={handleChangePassword}
-          />
+          <Suspense fallback={null}>
+            <ChangePasswordModal
+              onClose={() => setShowChangePasswordModal(false)}
+              onChangePassword={handleChangePassword}
+            />
+          </Suspense>
         )}
-        <Dashboard
-            appState={appState}
-            onLogout={handleLogout}
-            currentUser={user}
-            onUpdateEntry={handleUpdateEntry}
-            onUpdateUsers={handleUpdateUsers}
-            onSaveFeedback={handleSaveFeedback}
-            onThemeToggle={toggleTheme}
-            isDarkMode={isDarkMode}
-        />
+        <Suspense fallback={suspenseFallback}>
+          <Dashboard
+              appState={appState}
+              onLogout={handleLogout}
+              currentUser={user}
+              onUpdateEntry={handleUpdateEntry}
+              onUpdateUsers={handleUpdateUsers}
+              onSaveFeedback={handleSaveFeedback}
+              onThemeToggle={toggleTheme}
+              isDarkMode={isDarkMode}
+          />
+        </Suspense>
     </div>
   );
 };

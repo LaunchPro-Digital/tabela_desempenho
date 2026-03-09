@@ -1,9 +1,20 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AppState, User, Feedback } from '../types';
+import { AppState, User, UserRole, Feedback } from '../types';
 import { supabase } from '../supabaseClient';
 import { INITIAL_STATE } from '../constants';
 
-export const useAppState = (enabled: boolean = true) => {
+interface UseAppStateOptions {
+  enabled?: boolean;
+  userId?: string;
+  userRole?: UserRole;
+}
+
+export const useAppState = (enabledOrOptions: boolean | UseAppStateOptions = true) => {
+  // Support both old boolean signature and new options object
+  const options: UseAppStateOptions = typeof enabledOrOptions === 'boolean'
+    ? { enabled: enabledOrOptions }
+    : enabledOrOptions;
+  const { enabled = true, userId, userRole } = options;
   const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
 
@@ -12,12 +23,25 @@ export const useAppState = (enabled: boolean = true) => {
   const loadState = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Usuários
-      const { data: usersData, error: usersError } = await supabase
-        .from('app_users')
-        .select('*')
-        .order('name');
+      // Contributors only need their own data; Partners need all
+      const isContributor = userRole === UserRole.CONTRIBUTOR && userId;
 
+      let entriesQuery = supabase.from('weekly_entries').select('*');
+      let feedbackQuery = supabase.from('weekly_feedback').select('*');
+      if (isContributor) {
+        entriesQuery = entriesQuery.eq('user_id', userId);
+        feedbackQuery = feedbackQuery.eq('user_id', userId);
+      }
+
+      // Parallel fetch: all 4 queries at once
+      const [usersResult, entriesResult, feedbackResult, configResult] = await Promise.all([
+        supabase.from('app_users').select('*').order('name'),
+        entriesQuery,
+        feedbackQuery,
+        supabase.from('app_config').select('value').eq('key', 'current_week').single(),
+      ]);
+
+      const { data: usersData, error: usersError } = usersResult;
       if (usersError) throw usersError;
 
       const users: User[] = (usersData || []).map(u => ({
@@ -32,11 +56,7 @@ export const useAppState = (enabled: boolean = true) => {
         password_changed: u.password_changed,
       }));
 
-      // 2. Entradas semanais
-      const { data: entriesData, error: entriesError } = await supabase
-        .from('weekly_entries')
-        .select('*');
-
+      const { data: entriesData, error: entriesError } = entriesResult;
       if (entriesError) throw entriesError;
 
       const entries: Record<string, any[]> = {};
@@ -50,11 +70,7 @@ export const useAppState = (enabled: boolean = true) => {
         });
       });
 
-      // 3. Feedbacks
-      const { data: feedbackData, error: feedbackError } = await supabase
-        .from('weekly_feedback')
-        .select('*');
-
+      const { data: feedbackData, error: feedbackError } = feedbackResult;
       if (feedbackError) throw feedbackError;
 
       const feedback: Record<string, Feedback[]> = {};
@@ -70,12 +86,7 @@ export const useAppState = (enabled: boolean = true) => {
         });
       });
 
-      // 4. Config (semana atual)
-      const { data: configData } = await supabase
-        .from('app_config')
-        .select('value')
-        .eq('key', 'current_week')
-        .single();
+      const { data: configData } = configResult;
 
       const currentWeek = configData ? Number(configData.value) : INITIAL_STATE.currentWeek;
 

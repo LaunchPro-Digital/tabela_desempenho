@@ -188,43 +188,9 @@ export const MOCK_USERS: User[] = [
   }
 ];
 
-// Helper to generate some dummy historical data
-const generateMockEntries = () => {
-  const entries: Record<string, any[]> = {};
-  MOCK_USERS.forEach(user => {
-    // Generate data for weeks 1-3
-    const userEntries = [];
-    for (let w = 1; w < 4; w++) {
-      user.metrics.forEach(metric => {
-        const inputData: any = { metricId: metric.id };
-        metric.inputs.forEach(inp => {
-          // Randomized realistic data
-          if (metric.type === MetricType.PERCENTAGE_CUMULATIVE) {
-             const base = Math.floor(Math.random() * 10) + 1;
-             inputData[inp.key] = inp.key.includes('total') ? base : Math.floor(base * (Math.random() * 0.5 + 0.4));
-          } else if (metric.type === MetricType.SUM_TARGET) {
-             inputData[inp.key] = Math.floor(Math.random() * 3);
-          } else {
-             inputData[inp.key] = 8 + Math.floor(Math.random() * 2);
-          }
-        });
-        
-        userEntries.push({
-            week: w,
-            inputs: inputData,
-            calculatedValue: 0, // Calculated on fly in component usually, but stored here for simplicity
-            timestamp: new Date().toISOString()
-        });
-      });
-    }
-    entries[user.id] = userEntries;
-  });
-  return entries;
-};
-
 export const INITIAL_STATE: AppState = {
   users: MOCK_USERS,
-  entries: generateMockEntries(),
+  entries: {},
   feedback: {},
   currentWeek: INITIAL_WEEK
 };

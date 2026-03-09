@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, AppState, UserRole, Metric, Feedback } from '../types';
 import { calculateMetricStatus, getStatusColor, calculateWeeklyValue, getWeeklyHighlights } from '../services/calculator';
 import { Users, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink, Clock } from 'lucide-react';
@@ -21,6 +21,11 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [editingCell, setEditingCell] = useState<{userId: string, week: number, metric: Metric, currentInputs: any} | null>(null);
   const [editForm, setEditForm] = useState<any>({});
+
+  const weeklyHighlights = useMemo(
+    () => getWeeklyHighlights(appState.users, appState.entries, 2),
+    [appState.users, appState.entries]
+  );
 
   // Helper to get inputs safely
   const getEntryInputs = (userId: string, week: number, metricId: string) => {
@@ -107,7 +112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                 <p className="text-sm font-bold text-brand-black dark:text-white">{currentUser.name}</p>
                 <p className="text-xs text-brand-grey dark:text-slate-400">Semana {appState.currentWeek}</p>
             </div>
-            <img src={currentUser.avatar} alt="Me" className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-md" />
+            <img src={currentUser.avatar} alt="Me" loading="lazy" className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-md" />
             <button onClick={onLogout} className="text-sm font-bold text-brand-grey dark:text-slate-400 hover:text-red-500 transition-colors ml-2 min-h-[44px] px-2">Sair</button>
         </div>
       </nav>
@@ -142,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                     <div key={user.id} className="bg-white dark:bg-brand-darkCard rounded-2xl border border-gray-100 dark:border-brand-darkBorder p-5 shadow-sm">
                         <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
-                                <img src={user.avatar} className="w-12 h-12 rounded-full border border-gray-200 dark:border-slate-600 shadow-sm" alt={user.name} />
+                                <img src={user.avatar} loading="lazy" className="w-12 h-12 rounded-full border border-gray-200 dark:border-slate-600 shadow-sm" alt={user.name} />
                                 <div>
                                     <p className="font-bold text-brand-black dark:text-white text-base">{user.name}</p>
                                     <p className="text-xs text-brand-grey dark:text-slate-400">{user.roleTitle}</p>
@@ -206,7 +211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                                         <tr key={metric.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors group">
                                             <td className="px-6 py-4 sticky left-0 bg-white dark:bg-brand-darkCard group-hover:bg-gray-50 dark:group-hover:bg-brand-darkCard transition-colors border-r border-transparent group-hover:border-gray-100 dark:group-hover:border-brand-darkBorder">
                                                 <div className="flex items-center gap-4">
-                                                    <img src={user.avatar} className="w-10 h-10 rounded-full border border-gray-200 dark:border-slate-600 shadow-sm" alt={user.name} />
+                                                    <img src={user.avatar} loading="lazy" className="w-10 h-10 rounded-full border border-gray-200 dark:border-slate-600 shadow-sm" alt={user.name} />
                                                     <div className="flex-1 min-w-0">
                                                         <div className="font-bold text-brand-black dark:text-white text-base">{user.name}</div>
                                                         <div className="text-xs text-brand-grey dark:text-slate-400 truncate" title={metric.title}>{metric.title}</div>
@@ -386,26 +391,22 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                     Destaques da Semana
                 </h3>
                 <div className="space-y-4">
-                    {(() => {
-                        const highlights = getWeeklyHighlights(appState.users, appState.entries, 2);
-                        if (highlights.length === 0) return (
-                            <p className="text-sm text-brand-grey dark:text-slate-400">Sem dados suficientes para destaques</p>
-                        );
-                        return highlights.map(h => (
-                            <div key={h.user.id} className="flex items-center gap-4 pb-4 border-b border-gray-50 dark:border-slate-800 last:border-0 last:pb-0">
-                                <img src={h.user.avatar} className="w-12 h-12 rounded-full border border-gray-100 dark:border-slate-600" />
-                                <div>
-                                    <p className="font-bold text-brand-black dark:text-white text-lg">{h.user.name}</p>
-                                    <div className="flex items-center gap-1.5 mt-1">
-                                        {h.statuses.map(s => (
-                                            <span key={s.metricId} className={`w-3 h-3 rounded-full ${getStatusColor(s.status)}`} title={`${s.value.toFixed(1)}`}></span>
-                                        ))}
-                                        <span className="text-xs text-brand-grey dark:text-slate-400 ml-1 font-medium">Score: {h.score}</span>
-                                    </div>
+                    {weeklyHighlights.length === 0 ? (
+                        <p className="text-sm text-brand-grey dark:text-slate-400">Sem dados suficientes para destaques</p>
+                    ) : weeklyHighlights.map(h => (
+                        <div key={h.user.id} className="flex items-center gap-4 pb-4 border-b border-gray-50 dark:border-slate-800 last:border-0 last:pb-0">
+                            <img src={h.user.avatar} loading="lazy" className="w-12 h-12 rounded-full border border-gray-100 dark:border-slate-600" />
+                            <div>
+                                <p className="font-bold text-brand-black dark:text-white text-lg">{h.user.name}</p>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    {h.statuses.map(s => (
+                                        <span key={s.metricId} className={`w-3 h-3 rounded-full ${getStatusColor(s.status)}`} title={`${s.value.toFixed(1)}`}></span>
+                                    ))}
+                                    <span className="text-xs text-brand-grey dark:text-slate-400 ml-1 font-medium">Score: {h.score}</span>
                                 </div>
                             </div>
-                        ));
-                    })()}
+                        </div>
+                    ))}
                 </div>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User, AppState, UserRole, Metric, Feedback } from '../types';
-import { calculateMetricStatus, getStatusColor, calculateWeeklyValue } from '../services/calculator';
-import { Users, BarChart3, ChevronRight, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink, Clock } from 'lucide-react';
+import { calculateMetricStatus, getStatusColor, calculateWeeklyValue, getWeeklyHighlights } from '../services/calculator';
+import { Users, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink, Clock } from 'lucide-react';
 import OneOnOne from './OneOnOne';
 import AdminPanel from './AdminPanel';
 
@@ -88,19 +88,19 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
         </div>
         <div className="flex items-center gap-4">
             
-            <button 
+            <button
                 onClick={onThemeToggle}
-                className="p-2 rounded-full bg-gray-50 dark:bg-slate-800 text-brand-grey dark:text-slate-300 hover:text-brand-purple dark:hover:text-brand-purple transition-all"
+                className="p-2.5 rounded-full bg-gray-50 dark:bg-slate-800 text-brand-grey dark:text-slate-300 hover:text-brand-purple dark:hover:text-brand-purple transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
             {currentUser.role === UserRole.PARTNER && (
-                <button 
+                <button
                     onClick={() => setShowAdminPanel(true)}
-                    className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-brand-grey dark:text-slate-300 hover:text-brand-black dark:hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                    className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-brand-grey dark:text-slate-300 hover:text-brand-black dark:hover:text-white p-2.5 md:px-4 md:py-2 rounded-lg text-sm font-bold transition-colors min-h-[44px] min-w-[44px] justify-center"
                 >
-                    <Settings size={16} /> Gestão do Time
+                    <Settings size={18} /> <span className="hidden md:inline">Gestão do Time</span>
                 </button>
             )}
             <div className="text-right hidden sm:block">
@@ -108,7 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                 <p className="text-xs text-brand-grey dark:text-slate-400">Semana {appState.currentWeek}</p>
             </div>
             <img src={currentUser.avatar} alt="Me" className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-md" />
-            <button onClick={onLogout} className="text-sm font-medium text-brand-grey dark:text-slate-400 hover:text-red-500 transition-colors ml-2">Sair</button>
+            <button onClick={onLogout} className="text-sm font-bold text-brand-grey dark:text-slate-400 hover:text-red-500 transition-colors ml-2 min-h-[44px] px-2">Sair</button>
         </div>
       </nav>
 
@@ -134,8 +134,52 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
             </div>
         </div>
 
-        {/* The Table (Cockpit) */}
-        <div className="bg-white dark:bg-brand-darkCard rounded-2xl shadow-xl border border-gray-100 dark:border-brand-darkBorder overflow-hidden transition-colors">
+        {/* Mobile Cards (< 768px) */}
+        <div className="block md:hidden space-y-4">
+            {appState.users.map(user => {
+                const userEntries = appState.entries[user.id] || [];
+                return (
+                    <div key={user.id} className="bg-white dark:bg-brand-darkCard rounded-2xl border border-gray-100 dark:border-brand-darkBorder p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <img src={user.avatar} className="w-12 h-12 rounded-full border border-gray-200 dark:border-slate-600 shadow-sm" alt={user.name} />
+                                <div>
+                                    <p className="font-bold text-brand-black dark:text-white text-base">{user.name}</p>
+                                    <p className="text-xs text-brand-grey dark:text-slate-400">{user.roleTitle}</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSelectedUserFor1on1(user)}
+                                className="p-2.5 text-brand-grey dark:text-slate-500 hover:text-brand-purple dark:hover:text-brand-purple hover:bg-brand-purple/10 rounded-full transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                title="Abrir 1-1"
+                            >
+                                <PlayCircle size={22} />
+                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            {user.metrics.map(metric => {
+                                const stats = calculateMetricStatus(metric, userEntries);
+                                return (
+                                    <div key={metric.id} className="flex items-center justify-between py-2 border-t border-gray-50 dark:border-slate-800 first:border-0 first:pt-0">
+                                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                            <span className={`w-3 h-3 rounded-full flex-shrink-0 ${getStatusColor(stats.status)}`}></span>
+                                            <span className="text-sm text-brand-black dark:text-white truncate">{metric.title}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 ml-3">
+                                            <span className="text-sm font-bold text-brand-black dark:text-white">{stats.value.toFixed(1)}{metric.unit}</span>
+                                            <span className="text-xs text-brand-grey dark:text-slate-500">/ {metric.targetValue}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+
+        {/* The Table (Cockpit) — Hidden on mobile */}
+        <div className="hidden md:block bg-white dark:bg-brand-darkCard rounded-2xl shadow-xl border border-gray-100 dark:border-brand-darkBorder overflow-hidden transition-colors">
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs font-bold text-brand-grey dark:text-slate-400 uppercase bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-brand-darkBorder">
@@ -241,7 +285,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                 <MessageSquare size={24} className="text-brand-purple" />
                 Alinhamentos Recentes
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="flex overflow-x-auto gap-6 pb-2 snap-x md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:overflow-visible md:pb-0">
                 {appState.users.map(u => {
                     const feedbacks = appState.feedback[u.id] || [];
                     // Get latest feedback
@@ -250,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                     if (!latestFeedback) return null;
 
                     return (
-                        <div key={u.id} className="bg-white dark:bg-brand-darkCard border border-gray-100 dark:border-brand-darkBorder rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div key={u.id} className="min-w-[280px] flex-shrink-0 md:min-w-0 md:flex-shrink bg-white dark:bg-brand-darkCard border border-gray-100 dark:border-brand-darkBorder rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow snap-start">
                             <div className="flex items-center gap-3 mb-4 border-b border-gray-50 dark:border-slate-800 pb-3">
                                 <img src={u.avatar} className="w-10 h-10 rounded-full border border-gray-100 dark:border-slate-700" />
                                 <div>
@@ -342,15 +386,26 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                     Destaques da Semana
                 </h3>
                 <div className="space-y-4">
-                    {appState.users.slice(0, 2).map(u => (
-                         <div key={u.id} className="flex items-center gap-4 pb-4 border-b border-gray-50 dark:border-slate-800 last:border-0 last:pb-0">
-                            <img src={u.avatar} className="w-12 h-12 rounded-full border border-gray-100 dark:border-slate-600" />
-                            <div>
-                                <p className="font-bold text-brand-black dark:text-white text-lg">{u.name}</p>
-                                <p className="text-xs text-brand-green font-bold uppercase tracking-wide">Todas as metas no verde</p>
+                    {(() => {
+                        const highlights = getWeeklyHighlights(appState.users, appState.entries, 2);
+                        if (highlights.length === 0) return (
+                            <p className="text-sm text-brand-grey dark:text-slate-400">Sem dados suficientes para destaques</p>
+                        );
+                        return highlights.map(h => (
+                            <div key={h.user.id} className="flex items-center gap-4 pb-4 border-b border-gray-50 dark:border-slate-800 last:border-0 last:pb-0">
+                                <img src={h.user.avatar} className="w-12 h-12 rounded-full border border-gray-100 dark:border-slate-600" />
+                                <div>
+                                    <p className="font-bold text-brand-black dark:text-white text-lg">{h.user.name}</p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        {h.statuses.map(s => (
+                                            <span key={s.metricId} className={`w-3 h-3 rounded-full ${getStatusColor(s.status)}`} title={`${s.value.toFixed(1)}`}></span>
+                                        ))}
+                                        <span className="text-xs text-brand-grey dark:text-slate-400 ml-1 font-medium">Score: {h.score}</span>
+                                    </div>
+                                </div>
                             </div>
-                         </div>
-                    ))}
+                        ));
+                    })()}
                 </div>
             </div>
 
@@ -378,4 +433,4 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
   );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);

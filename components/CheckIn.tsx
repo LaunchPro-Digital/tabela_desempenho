@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Metric, AppState } from '../types';
+import { User, AppState } from '../types';
 import { Save, AlertCircle, CheckCircle2, Moon, Sun } from 'lucide-react';
 
 interface CheckInProps {
@@ -21,10 +21,6 @@ const CheckIn: React.FC<CheckInProps> = ({ user, currentWeek, onSave, appState, 
     const userEntries = appState.entries[user.id] || [];
     return userEntries.some(e => e.week === currentWeek && e.inputs.metricId === m.id);
   });
-
-  if (hasSubmitted && !completed) {
-      // Logic handled by parent or render message
-  }
 
   const activeMetric = user.metrics[activeMetricIndex];
 
@@ -156,4 +152,4 @@ const CheckIn: React.FC<CheckInProps> = ({ user, currentWeek, onSave, appState, 
   );
 };
 
-export default CheckIn;
+export default React.memo(CheckIn);

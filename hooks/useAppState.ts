@@ -3,7 +3,7 @@ import { AppState, User, Feedback } from '../types';
 import { supabase } from '../supabaseClient';
 import { INITIAL_STATE } from '../constants';
 
-export const useAppState = () => {
+export const useAppState = (enabled: boolean = true) => {
   const [appState, setAppState] = useState<AppState>(INITIAL_STATE);
   const [loading, setLoading] = useState(true);
 
@@ -26,8 +26,10 @@ export const useAppState = () => {
         role: u.role,
         roleTitle: u.role_title,
         avatar: u.avatar,
-        password: u.password,
         metrics: u.metrics || [],
+        auth_id: u.auth_id,
+        email: u.email,
+        password_changed: u.password_changed,
       }));
 
       // 2. Entradas semanais
@@ -93,8 +95,12 @@ export const useAppState = () => {
   }, []);
 
   useEffect(() => {
-    loadState();
-  }, [loadState]);
+    if (enabled) {
+      loadState();
+    } else {
+      setLoading(false);
+    }
+  }, [loadState, enabled]);
 
   // ─── SEED (primeira execução) ──────────────────────────────────────────────
 
@@ -105,8 +111,9 @@ export const useAppState = () => {
       role: u.role,
       role_title: u.roleTitle,
       avatar: u.avatar,
-      password: u.password || '123',
       metrics: u.metrics,
+      email: u.email || null,
+      password_changed: u.password_changed || false,
     }));
 
     const { error: usersError } = await supabase
@@ -225,8 +232,9 @@ export const useAppState = () => {
       role: u.role,
       role_title: u.roleTitle,
       avatar: u.avatar,
-      password: u.password || '123',
       metrics: u.metrics,
+      email: u.email || null,
+      password_changed: u.password_changed || false,
       updated_at: new Date().toISOString(),
     }));
 
@@ -237,26 +245,11 @@ export const useAppState = () => {
     if (error) console.error('Erro ao atualizar usuários:', error);
   }, []);
 
-  const resetPassword = useCallback(async (userId: string, newPassword: string) => {
-    setAppState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.id === userId ? { ...u, password: newPassword } : u),
-    }));
-
-    const { error } = await supabase
-      .from('app_users')
-      .update({ password: newPassword, updated_at: new Date().toISOString() })
-      .eq('id', userId);
-
-    if (error) console.error('Erro ao resetar senha:', error);
-  }, []);
-
   return {
     appState,
     loading,
     updateEntry,
     saveFeedback,
     updateUsers,
-    resetPassword,
   };
 };

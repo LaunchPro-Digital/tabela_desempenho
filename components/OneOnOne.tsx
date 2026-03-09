@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AppState, Feedback, UserRole } from '../types';
 import { calculateMetricStatus, getStatusColor } from '../services/calculator';
-import { CheckSquare, MessageSquare, History, ChevronLeft, Save, Check, Clock } from 'lucide-react';
+import { CheckSquare, MessageSquare, History, ChevronLeft, Save, Check } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface OneOnOneProps {
@@ -84,22 +84,23 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
   return (
     <div className="bg-brand-offWhite dark:bg-brand-darkBg min-h-screen pb-20 transition-colors duration-300">
       {/* Header */}
-      <div className="bg-white dark:bg-brand-darkCard sticky top-0 z-10 px-6 py-4 flex items-center justify-between shadow-sm border-b border-gray-100 dark:border-brand-darkBorder transition-colors">
-        <div className="flex items-center gap-4">
-            <button onClick={onClose} className="text-brand-grey dark:text-slate-400 hover:text-brand-black dark:hover:text-white font-medium text-sm flex items-center gap-1">
-                <ChevronLeft size={16} /> Voltar
+      <div className="bg-white dark:bg-brand-darkCard sticky top-0 z-10 px-4 md:px-6 py-4 flex items-center justify-between shadow-sm border-b border-gray-100 dark:border-brand-darkBorder transition-colors">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            <button onClick={onClose} className="text-brand-grey dark:text-slate-400 hover:text-brand-black dark:hover:text-white font-medium text-sm flex items-center gap-1 min-h-[44px] min-w-[44px] justify-center flex-shrink-0">
+                <ChevronLeft size={18} /> <span className="hidden sm:inline">Voltar</span>
             </button>
-            <div className="h-8 w-px bg-gray-200 dark:bg-brand-darkBorder"></div>
-            <div className="flex items-center gap-3">
-                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-gray-200 dark:border-slate-600" />
-                <div>
-                    <h1 className="text-lg font-bold text-brand-black dark:text-white leading-tight">Painel Individual: {user.name}</h1>
-                    <p className="text-xs text-brand-grey dark:text-slate-400 uppercase tracking-wide">{user.roleTitle}</p>
+            <div className="h-8 w-px bg-gray-200 dark:bg-brand-darkBorder hidden sm:block"></div>
+            <div className="flex items-center gap-3 min-w-0">
+                <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-gray-200 dark:border-slate-600 flex-shrink-0" />
+                <div className="min-w-0">
+                    <h1 className="text-base md:text-lg font-bold text-brand-black dark:text-white leading-tight truncate"><span className="hidden md:inline">Painel Individual: </span>{user.name}</h1>
+                    <p className="text-xs text-brand-grey dark:text-slate-400 uppercase tracking-wide truncate">{user.roleTitle}</p>
                 </div>
             </div>
         </div>
-        <div className="flex items-center gap-2">
-            <div className={`px-4 py-1.5 rounded-full text-white text-sm font-bold shadow-sm ${getStatusColor(currentStats.status)}`}>
+        <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <div className={`w-3 h-3 md:hidden rounded-full ${getStatusColor(currentStats.status)}`}></div>
+            <div className={`hidden md:block px-4 py-1.5 rounded-full text-white text-sm font-bold shadow-sm ${getStatusColor(currentStats.status)}`}>
                 Farol Principal: {primaryMetric.targetValue}{primaryMetric.unit}
             </div>
         </div>
@@ -254,9 +255,9 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
                                 </div>
                             )}
                         </div>
-                        <button 
+                        <button
                             onClick={handleFeedbackSubmit}
-                            className="order-1 md:order-2 bg-brand-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-brand-black font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center gap-2 transform hover:-translate-y-0.5"
+                            className="order-1 md:order-2 w-full md:w-auto bg-brand-black dark:bg-white hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-brand-black font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5 min-h-[44px]"
                         >
                             <Save size={18} /> Salvar Alinhamento
                         </button>
@@ -271,4 +272,4 @@ const OneOnOne: React.FC<OneOnOneProps> = ({ user, appState, onSaveFeedback, onC
   );
 };
 
-export default OneOnOne;
+export default React.memo(OneOnOne);

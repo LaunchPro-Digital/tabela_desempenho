@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { User, UserRole, Metric, MetricType, MetricInputConfig } from '../types';
-import { Trash2, Plus, X, Save, Edit2, ChevronLeft, Upload } from 'lucide-react';
+import { User, UserRole, Metric, MetricType } from '../types';
+import { manageUser } from '../supabaseClient';
+import { Trash2, Plus, X, Save, Edit2, ChevronLeft, Upload, KeyRound, Loader2 } from 'lucide-react';
 
 interface AdminPanelProps {
   users: User[];
@@ -11,6 +12,8 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'list' | 'edit'>('list');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // New User Template
   const createNewUser = (): User => ({
@@ -19,37 +22,107 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
     role: UserRole.CONTRIBUTOR,
     roleTitle: '',
     avatar: `https://picsum.photos/seed/${Date.now()}/150/150`,
-    password: '123',
+    email: '',
     metrics: []
   });
 
   const handleEditUser = (user: User) => {
-    setEditingUser({ ...user }); // Deep copyish
+    setEditingUser({ ...user });
     setActiveTab('edit');
+    setActionMessage(null);
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Tem certeza que deseja remover este colaborador?')) {
-      onUpdateUsers(users.filter(u => u.id !== userId));
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Tem certeza que deseja remover este colaborador?')) return;
+
+    const userToDelete = users.find(u => u.id === userId);
+    if (!userToDelete) return;
+
+    // If user has auth_id, delete from auth too
+    if (userToDelete.auth_id) {
+      setActionLoading(true);
+      const result = await manageUser({
+        action: 'delete',
+        target_user_id: userToDelete.id,
+      });
+      setActionLoading(false);
+
+      if (!result.success) {
+        setActionMessage({ type: 'error', text: result.error || 'Erro ao remover usuário do auth.' });
+        return;
+      }
     }
+
+    onUpdateUsers(users.filter(u => u.id !== userId));
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!editingUser) return;
     if (!editingUser.name) return alert('Nome é obrigatório');
 
-    const exists = users.find(u => u.id === editingUser.id);
-    let newUsers = [...users];
-    
-    if (exists) {
-      newUsers = newUsers.map(u => u.id === editingUser.id ? editingUser : u);
+    const isNew = !users.find(u => u.id === editingUser.id);
+
+    // If new user and has email, create auth account via RPC
+    if (isNew && editingUser.email) {
+      setActionLoading(true);
+      const result = await manageUser({
+        action: 'create',
+        user_email: editingUser.email,
+        user_name: editingUser.name,
+        user_role: editingUser.role,
+        user_role_title: editingUser.roleTitle,
+        user_avatar: editingUser.avatar,
+        user_metrics: editingUser.metrics,
+      });
+      setActionLoading(false);
+
+      if (!result.success) {
+        setActionMessage({ type: 'error', text: result.error || 'Erro ao criar usuário.' });
+        return;
+      }
+
+      // Update editingUser with auth data from RPC
+      const savedUser: User = {
+        ...editingUser,
+        id: result.user_id || editingUser.id,
+        auth_id: result.auth_id,
+        password_changed: false,
+      };
+
+      onUpdateUsers([...users, savedUser]);
+      setActionMessage({ type: 'success', text: `${savedUser.name} criado com sucesso! Senha padrão: ordus2025` });
     } else {
-      newUsers.push(editingUser);
+      // Just update locally (existing user edit)
+      let newUsers = [...users];
+      newUsers = newUsers.map(u => u.id === editingUser.id ? editingUser : u);
+      onUpdateUsers(newUsers);
+      setActionMessage({ type: 'success', text: 'Alterações salvas.' });
     }
-    
-    onUpdateUsers(newUsers);
+
     setEditingUser(null);
     setActiveTab('list');
+  };
+
+  const handleResetPassword = async (user: User) => {
+    if (!user.auth_id) {
+      setActionMessage({ type: 'error', text: 'Usuário sem conta de autenticação.' });
+      return;
+    }
+
+    if (!confirm(`Resetar a senha de ${user.name} para "ordus2025"?`)) return;
+
+    setActionLoading(true);
+    const result = await manageUser({
+      action: 'reset_password',
+      target_user_id: user.id,
+    });
+    setActionLoading(false);
+
+    if (result.success) {
+      setActionMessage({ type: 'success', text: `Senha de ${user.name} resetada para "ordus2025".` });
+    } else {
+      setActionMessage({ type: 'error', text: result.error || 'Erro ao resetar senha.' });
+    }
   };
 
   const handleAddMetric = () => {
@@ -74,7 +147,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
     updatedMetrics[index] = { ...updatedMetrics[index], [field]: value };
     setEditingUser({ ...editingUser, metrics: updatedMetrics });
   };
-  
+
   const handleUpdateInputLabel = (metricIndex: number, inputIndex: number, newLabel: string) => {
       if (!editingUser) return;
       const updatedMetrics = [...editingUser.metrics];
@@ -105,7 +178,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
         <div className="bg-slate-800 dark:bg-brand-darkCard px-6 py-4 flex items-center justify-between border-b border-slate-700 dark:border-brand-darkBorder">
             <div className="flex items-center gap-4">
                 {activeTab === 'edit' && (
-                    <button onClick={() => setActiveTab('list')} className="md:hidden text-white">
+                    <button onClick={() => setActiveTab('list')} className="md:hidden text-white min-h-[44px] min-w-[44px] flex items-center justify-center">
                         <ChevronLeft />
                     </button>
                 )}
@@ -114,20 +187,31 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                     <p className="text-slate-400 text-sm">Adicionar, editar e remover colaboradores e metas.</p>
                 </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-slate-700 dark:hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-2 hover:bg-slate-700 dark:hover:bg-slate-800 rounded-lg text-slate-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
                 <X size={24} />
             </button>
         </div>
 
+        {/* Action message banner */}
+        {actionMessage && (
+          <div className={`px-6 py-3 text-sm font-medium ${actionMessage.type === 'success' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+            {actionMessage.text}
+            <button onClick={() => setActionMessage(null)} className="ml-4 opacity-60 hover:opacity-100">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-hidden flex">
-            
+
             {/* Sidebar List */}
             <div className={`w-full md:w-1/3 lg:w-1/4 bg-slate-800 dark:bg-brand-darkCard border-r border-slate-700 dark:border-brand-darkBorder flex flex-col ${activeTab === 'edit' ? 'hidden md:flex' : 'flex'}`}>
                 <div className="p-4">
-                    <button 
+                    <button
                         onClick={() => {
                             setEditingUser(createNewUser());
                             setActiveTab('edit');
+                            setActionMessage(null);
                         }}
                         className="w-full bg-brand-purple hover:bg-brand-purpleDark text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 mb-4 transition-colors"
                     >
@@ -143,12 +227,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                                         <p className="text-xs text-slate-400">{u.roleTitle}</p>
                                     </div>
                                 </div>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleDeleteUser(u.id); }}
-                                    className="text-slate-500 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    {u.auth_id && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleResetPassword(u); }}
+                                        className="text-slate-500 hover:text-amber-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Resetar senha"
+                                      >
+                                        <KeyRound size={14} />
+                                      </button>
+                                    )}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteUser(u.id); }}
+                                        className="text-slate-500 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -164,10 +259,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                     </div>
                 ) : (
                     <div className="max-w-3xl mx-auto space-y-8 pb-20 animate-fade-in">
-                         {/* Back Button for Desktop too if desired, but mainly for mobile context */}
-                         <button 
-                            onClick={() => setActiveTab('list')} 
-                            className="flex items-center gap-2 text-brand-grey dark:text-slate-400 hover:text-brand-purple mb-4 md:hidden"
+                         <button
+                            onClick={() => setActiveTab('list')}
+                            className="flex items-center gap-2 text-brand-grey dark:text-slate-400 hover:text-brand-purple mb-4 md:hidden min-h-[44px]"
                         >
                             <ChevronLeft size={16} /> Voltar para lista
                         </button>
@@ -189,40 +283,44 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Nome</label>
-                                    <input 
-                                        type="text" 
-                                        value={editingUser.name} 
+                                    <input
+                                        type="text"
+                                        value={editingUser.name}
                                         onChange={e => setEditingUser({...editingUser, name: e.target.value})}
-                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none" 
+                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Cargo / Função</label>
-                                    <input 
-                                        type="text" 
-                                        value={editingUser.roleTitle} 
+                                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Cargo / Funcao</label>
+                                    <input
+                                        type="text"
+                                        value={editingUser.roleTitle}
                                         onChange={e => setEditingUser({...editingUser, roleTitle: e.target.value})}
-                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none" 
+                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Senha de Acesso</label>
-                                    <input 
-                                        type="text" 
-                                        value={editingUser.password} 
-                                        onChange={e => setEditingUser({...editingUser, password: e.target.value})}
-                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 font-mono bg-slate-50 focus:border-brand-purple outline-none" 
+                                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">E-mail</label>
+                                    <input
+                                        type="email"
+                                        value={editingUser.email || ''}
+                                        onChange={e => setEditingUser({...editingUser, email: e.target.value})}
+                                        placeholder="email@exemplo.com"
+                                        className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none"
                                     />
+                                    {!users.find(u => u.id === editingUser.id) && (
+                                      <p className="text-xs text-slate-400 mt-1">Senha padrao: ordus2025</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">Tipo de Acesso</label>
-                                    <select 
-                                        value={editingUser.role} 
+                                    <select
+                                        value={editingUser.role}
                                         onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}
                                         className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg p-2.5 focus:border-brand-purple outline-none"
                                     >
                                         <option value={UserRole.CONTRIBUTOR}>Colaborador (Time)</option>
-                                        <option value={UserRole.PARTNER}>Sócio (Admin)</option>
+                                        <option value={UserRole.PARTNER}>Socio (Admin)</option>
                                     </select>
                                 </div>
                             </div>
@@ -236,21 +334,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                                     + Adicionar Meta
                                 </button>
                             </div>
-                            
+
                             {editingUser.metrics.map((metric, idx) => (
                                 <div key={metric.id} className="bg-white dark:bg-brand-darkCard p-6 rounded-xl shadow-sm border border-slate-200 dark:border-brand-darkBorder relative group">
-                                    <button 
+                                    <button
                                         onClick={() => handleRemoveMetric(idx)}
                                         className="absolute top-4 right-4 text-slate-300 hover:text-red-500"
                                     >
                                         <Trash2 size={18} />
                                     </button>
-                                    
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                         <div className="md:col-span-2">
-                                            <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Título da Meta</label>
-                                            <input 
-                                                type="text" 
+                                            <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Titulo da Meta</label>
+                                            <input
+                                                type="text"
                                                 value={metric.title}
                                                 onChange={e => handleUpdateMetric(idx, 'title', e.target.value)}
                                                 className="w-full font-bold text-lg border-b border-slate-300 dark:border-slate-700 dark:bg-transparent dark:text-white focus:border-brand-purple outline-none pb-1"
@@ -259,8 +357,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                                         </div>
                                         <div>
                                             <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Alvo (Target)</label>
-                                            <input 
-                                                type="number" 
+                                            <input
+                                                type="number"
                                                 value={metric.targetValue}
                                                 onChange={e => handleUpdateMetric(idx, 'targetValue', parseFloat(e.target.value))}
                                                 className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded p-2 focus:border-brand-purple outline-none"
@@ -268,8 +366,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                                         </div>
                                         <div>
                                             <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Unidade</label>
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 value={metric.unit}
                                                 onChange={e => handleUpdateMetric(idx, 'unit', e.target.value)}
                                                 className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded p-2 focus:border-brand-purple outline-none"
@@ -277,27 +375,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
                                             />
                                         </div>
                                         <div className="md:col-span-2">
-                                            <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Tipo de Cálculo</label>
-                                            <select 
+                                            <label className="block text-xs uppercase font-bold text-slate-400 mb-1">Tipo de Calculo</label>
+                                            <select
                                                 value={metric.type}
                                                 onChange={e => handleUpdateMetric(idx, 'type', e.target.value)}
                                                 className="w-full border border-gray-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded p-2 focus:border-brand-purple outline-none"
                                             >
                                                 <option value={MetricType.PERCENTAGE_CUMULATIVE}>Percentual Acumulativo (Soma/Soma)</option>
-                                                <option value={MetricType.PERCENTAGE_AVERAGE}>Média de Percentual</option>
+                                                <option value={MetricType.PERCENTAGE_AVERAGE}>Media de Percentual</option>
                                                 <option value={MetricType.SUM_TARGET}>Soma Simples (Acumulado)</option>
-                                                <option value={MetricType.MAX_LIMIT}>Limite Máximo (Média)</option>
+                                                <option value={MetricType.MAX_LIMIT}>Limite Maximo (Media)</option>
                                             </select>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
-                                        <p className="font-bold mb-2 text-xs uppercase text-slate-500 dark:text-slate-400">Perguntas de Check-in (Editável):</p>
+                                        <p className="font-bold mb-2 text-xs uppercase text-slate-500 dark:text-slate-400">Perguntas de Check-in (Editavel):</p>
                                         {metric.inputs.map((inp, i) => (
                                             <div key={i} className="flex gap-2 mb-2 last:mb-0 items-center">
                                                 <span className="font-mono text-xs bg-white dark:bg-slate-800 px-1 border dark:border-slate-700 rounded text-slate-400">{inp.key}</span>
-                                                <input 
-                                                    type="text" 
+                                                <input
+                                                    type="text"
                                                     value={inp.label}
                                                     onChange={(e) => handleUpdateInputLabel(idx, i, e.target.value)}
                                                     className="flex-1 text-sm border-b border-slate-300 dark:border-slate-700 bg-transparent focus:border-brand-purple outline-none pb-1 dark:text-white"
@@ -311,11 +409,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
 
                         {/* Action Buttons */}
                         <div className="flex gap-4 pt-6">
-                            <button 
+                            <button
                                 onClick={handleSaveUser}
-                                className="flex-1 bg-brand-green hover:bg-brand-greenDark text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+                                disabled={actionLoading}
+                                className="flex-1 bg-brand-green hover:bg-brand-greenDark disabled:bg-gray-400 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
                             >
-                                <Save size={20} /> Salvar Alterações
+                                {actionLoading ? (
+                                  <Loader2 size={20} className="animate-spin" />
+                                ) : (
+                                  <><Save size={20} /> Salvar Alteracoes</>
+                                )}
                             </button>
                         </div>
                     </div>
@@ -326,4 +429,4 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ users, onUpdateUsers, onClose }
   );
 };
 
-export default AdminPanel;
+export default React.memo(AdminPanel);

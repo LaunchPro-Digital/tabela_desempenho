@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, UserRole, Feedback } from './types';
 import { useAppState } from './hooks/useAppState';
+import { supabase, signIn, signOut, updatePassword } from './supabaseClient';
 import Login from './components/Login';
+import ChangePassword from './components/ChangePassword';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import Dashboard from './components/Dashboard';
 import CheckIn from './components/CheckIn';
 
@@ -9,6 +12,11 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [viewMode, setViewMode] = useState<'checkin' | 'dashboard'>('checkin');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+
+  const isAuthenticated = user !== null && !needsPasswordChange;
 
   const {
     appState,
@@ -16,8 +24,7 @@ const App: React.FC = () => {
     updateEntry,
     saveFeedback,
     updateUsers,
-    resetPassword,
-  } = useAppState();
+  } = useAppState(isAuthenticated);
 
   // Initialize Theme
   useEffect(() => {
@@ -30,7 +37,70 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const toggleTheme = () => {
+  // Session management via onAuthStateChange
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        // Find the matching app_user by auth_id or email
+        const authEmail = session.user.email;
+        const authId = session.user.id;
+
+        const { data: appUser } = await supabase
+          .from('app_users')
+          .select('*')
+          .or(`auth_id.eq.${authId},email.eq.${authEmail}`)
+          .single();
+
+        if (appUser) {
+          const mappedUser: User = {
+            id: appUser.id,
+            name: appUser.name,
+            role: appUser.role,
+            roleTitle: appUser.role_title,
+            avatar: appUser.avatar,
+            metrics: appUser.metrics || [],
+            auth_id: appUser.auth_id,
+            email: appUser.email,
+            password_changed: appUser.password_changed,
+          };
+
+          // If auth_id not yet linked, link it now
+          if (!appUser.auth_id) {
+            await supabase
+              .from('app_users')
+              .update({ auth_id: authId })
+              .eq('id', appUser.id);
+            mappedUser.auth_id = authId;
+          }
+
+          setUser(mappedUser);
+
+          // Check if first access (needs password change)
+          if (!appUser.password_changed) {
+            setNeedsPasswordChange(true);
+          } else {
+            setNeedsPasswordChange(false);
+            if (mappedUser.role === UserRole.PARTNER) {
+              setViewMode('dashboard');
+            } else {
+              setViewMode('checkin');
+            }
+          }
+        }
+      } else {
+        setUser(null);
+        setNeedsPasswordChange(false);
+      }
+
+      setAuthLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const toggleTheme = useCallback(() => {
       setIsDarkMode(prev => {
           const newVal = !prev;
           if (newVal) {
@@ -42,43 +112,75 @@ const App: React.FC = () => {
           }
           return newVal;
       });
-  };
+  }, []);
 
-  const handleLogin = (selectedUser: User) => {
-    setUser(selectedUser);
-    if (selectedUser.role === UserRole.PARTNER) {
-        setViewMode('dashboard');
-    } else {
-        setViewMode('checkin');
+  const handleLogin = useCallback(async (email: string, password: string): Promise<{ error?: string }> => {
+    const { error } = await signIn(email, password);
+    if (error) {
+      return { error: 'Credenciais inválidas. Verifique seu e-mail e senha.' };
     }
-  };
+    // onAuthStateChange will handle setting user
+    return {};
+  }, []);
 
-  const handleResetPassword = (userId: string, newPass: string) => {
-      resetPassword(userId, newPass);
-  };
+  const handleChangePassword = useCallback(async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await updatePassword(newPassword);
+    if (error) {
+      return { success: false, error: error.message };
+    }
 
-  const handleSaveMetric = (metricId: string, inputs: any) => {
+    // Mark password as changed in app_users
+    if (user) {
+      await supabase
+        .from('app_users')
+        .update({ password_changed: true })
+        .eq('id', user.id);
+    }
+
+    return { success: true };
+  }, [user]);
+
+  const handlePasswordChanged = useCallback(() => {
+    setNeedsPasswordChange(false);
+    if (user) {
+      setUser({ ...user, password_changed: true });
+      if (user.role === UserRole.PARTNER) {
+        setViewMode('dashboard');
+      } else {
+        setViewMode('checkin');
+      }
+    }
+  }, [user]);
+
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    setUser(null);
+    setNeedsPasswordChange(false);
+  }, []);
+
+  const handleSaveMetric = useCallback((metricId: string, inputs: any) => {
     if (!user) return;
     updateEntry(user.id, appState.currentWeek, metricId, inputs);
-  };
+  }, [user, appState.currentWeek, updateEntry]);
 
-  const handleUpdateEntry = (userId: string, week: number, metricId: string, inputs: any) => {
+  const handleUpdateEntry = useCallback((userId: string, week: number, metricId: string, inputs: any) => {
     updateEntry(userId, week, metricId, inputs);
-  };
+  }, [updateEntry]);
 
-  const handleSaveFeedback = (userId: string, feedback: Feedback) => {
+  const handleSaveFeedback = useCallback((userId: string, feedback: Feedback) => {
       saveFeedback(userId, feedback);
-  };
+  }, [saveFeedback]);
 
-  const handleUpdateUsers = (updatedUsers: User[]) => {
+  const handleUpdateUsers = useCallback((updatedUsers: User[]) => {
       updateUsers(updatedUsers);
       if (user) {
           const freshUser = updatedUsers.find(u => u.id === user.id);
           if (freshUser) setUser(freshUser);
       }
-  };
+  }, [updateUsers, user]);
 
-  if (loading) {
+  // Loading states
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg flex items-center justify-center">
         <div className="text-center">
@@ -89,15 +191,25 @@ const App: React.FC = () => {
     );
   }
 
+  // Not authenticated
   if (!user) {
     return (
-        <Login 
-            users={appState.users} 
-            onLogin={handleLogin} 
+        <Login
+            onLogin={handleLogin}
             onThemeToggle={toggleTheme}
             isDarkMode={isDarkMode}
-            onResetPassword={handleResetPassword}
         />
+    );
+  }
+
+  // First access - needs password change
+  if (needsPasswordChange) {
+    return (
+      <ChangePassword
+        user={user}
+        onPasswordChanged={handlePasswordChanged}
+        onChangePassword={handleChangePassword}
+      />
     );
   }
 
@@ -117,20 +229,32 @@ const App: React.FC = () => {
                         </div>
                         <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-sm" />
                         {user.role === UserRole.PARTNER && (
-                            <button 
+                            <button
                                 onClick={() => setViewMode('dashboard')}
                                 className="ml-2 text-xs bg-brand-black dark:bg-white text-white dark:text-brand-black px-4 py-2 rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors font-bold"
                             >
                                 Ir para Cockpit
                             </button>
                         )}
-                        <button onClick={() => setUser(null)} className="text-xs font-bold text-brand-grey dark:text-slate-400 hover:text-red-500 ml-2">SAIR</button>
+                        <button
+                            onClick={() => setShowChangePasswordModal(true)}
+                            className="text-xs font-bold text-brand-grey dark:text-slate-400 hover:text-brand-purple ml-2"
+                        >
+                            Alterar Senha
+                        </button>
+                        <button onClick={handleLogout} className="text-xs font-bold text-brand-grey dark:text-slate-400 hover:text-red-500 ml-2">SAIR</button>
                   </div>
               </header>
-              <CheckIn 
-                user={user} 
-                currentWeek={appState.currentWeek} 
-                onSave={handleSaveMetric} 
+              {showChangePasswordModal && (
+                <ChangePasswordModal
+                  onClose={() => setShowChangePasswordModal(false)}
+                  onChangePassword={handleChangePassword}
+                />
+              )}
+              <CheckIn
+                user={user}
+                currentWeek={appState.currentWeek}
+                onSave={handleSaveMetric}
                 appState={appState}
                 onThemeToggle={toggleTheme}
                 isDarkMode={isDarkMode}
@@ -143,17 +267,29 @@ const App: React.FC = () => {
   return (
     <div>
         {/* Helper to switch to personal checkin for partners */}
-        <div className="fixed bottom-6 left-6 z-50">
-             <button 
+        <div className="fixed bottom-6 left-6 z-50 flex gap-2">
+             <button
                 onClick={() => setViewMode('checkin')}
                 className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder text-brand-grey dark:text-slate-300 shadow-xl px-5 py-3 rounded-full text-xs font-bold hover:bg-brand-offWhite dark:hover:bg-slate-800 hover:text-brand-purple dark:hover:text-brand-purple transition-all flex items-center gap-2"
             >
                 Meu Check-in
             </button>
+            <button
+                onClick={() => setShowChangePasswordModal(true)}
+                className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder text-brand-grey dark:text-slate-300 shadow-xl px-5 py-3 rounded-full text-xs font-bold hover:bg-brand-offWhite dark:hover:bg-slate-800 hover:text-brand-purple dark:hover:text-brand-purple transition-all"
+            >
+                Alterar Senha
+            </button>
         </div>
-        <Dashboard 
-            appState={appState} 
-            onLogout={() => setUser(null)} 
+        {showChangePasswordModal && (
+          <ChangePasswordModal
+            onClose={() => setShowChangePasswordModal(false)}
+            onChangePassword={handleChangePassword}
+          />
+        )}
+        <Dashboard
+            appState={appState}
+            onLogout={handleLogout}
             currentUser={user}
             onUpdateEntry={handleUpdateEntry}
             onUpdateUsers={handleUpdateUsers}

@@ -8,7 +8,6 @@ export const MOCK_USERS: User[] = [
     name: 'Rafael',
     role: UserRole.CONTRIBUTOR,
     roleTitle: 'Tráfego Pago',
-    password: '123',
     avatar: 'https://picsum.photos/seed/rafael/150/150',
     metrics: [
       {
@@ -29,7 +28,6 @@ export const MOCK_USERS: User[] = [
     name: 'Kauã',
     role: UserRole.CONTRIBUTOR,
     roleTitle: 'Automação & IA',
-    password: '123',
     avatar: 'https://picsum.photos/seed/kaua/150/150',
     metrics: [
       {
@@ -50,7 +48,6 @@ export const MOCK_USERS: User[] = [
     name: 'Kevin',
     role: UserRole.CONTRIBUTOR,
     roleTitle: 'Design & Edição',
-    password: '123',
     avatar: 'https://picsum.photos/seed/kevin/150/150',
     metrics: [
       {
@@ -71,7 +68,6 @@ export const MOCK_USERS: User[] = [
     name: 'Arthur',
     role: UserRole.CONTRIBUTOR,
     roleTitle: 'Copywriter',
-    password: '123',
     avatar: 'https://picsum.photos/seed/arthur/150/150',
     metrics: [
         {
@@ -92,7 +88,7 @@ export const MOCK_USERS: User[] = [
     name: 'Leandro',
     role: UserRole.PARTNER,
     roleTitle: 'Sócio / Comercial',
-    password: 'admin',
+    email: 'leandrogeseth@gmail.com',
     avatar: 'https://picsum.photos/seed/leandro/150/150',
     metrics: [
       {
@@ -133,7 +129,7 @@ export const MOCK_USERS: User[] = [
     name: 'Joel',
     role: UserRole.PARTNER,
     roleTitle: 'Sócio / Financeiro / SDR',
-    password: 'admin',
+    email: 'ojoeljunior1@gmail.com',
     avatar: 'https://picsum.photos/seed/joel/150/150',
     metrics: [
       {
@@ -164,7 +160,7 @@ export const MOCK_USERS: User[] = [
     name: 'Adriano',
     role: UserRole.PARTNER,
     roleTitle: 'Sócio / PM / CS',
-    password: 'admin',
+    email: 'sistemawebinfo@gmail.com',
     avatar: 'https://picsum.photos/seed/adriano/150/150',
     metrics: [
       {

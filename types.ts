@@ -51,7 +51,9 @@ export interface User {
   avatar: string;
   roleTitle: string;
   metrics: Metric[];
-  password?: string; // New field for access control
+  auth_id?: string;
+  email?: string;
+  password_changed?: boolean;
 }
 
 export interface AppState {

@@ -1,4 +1,4 @@
-import { Metric, MetricType, WeeklyData } from '../types';
+import { Metric, MetricType, WeeklyData, User } from '../types';
 
 export const calculateWeeklyValue = (metric: Metric, entry: WeeklyData): number => {
     if (!entry || !entry.inputs) return 0;
@@ -92,8 +92,8 @@ export const calculateMetricStatus = (metric: Metric, entries: WeeklyData[]) => 
   }
 
   // Determine Color
-  let status = 'gray';
-  
+  let status: string;
+
   // Logic for comparison
   if (metric.type === MetricType.MAX_LIMIT) {
      // Lower is better
@@ -128,3 +128,48 @@ export const getStatusColor = (status: string) => {
         default: return 'bg-slate-200';
     }
 }
+
+export interface HighlightResult {
+  user: User;
+  score: number;
+  primaryValue: number;
+  statuses: { metricId: string; status: string; value: number }[];
+}
+
+/**
+ * Identifica os membros com melhor performance real no trimestre.
+ * Pontuação: green=3, yellow=2, red=1, gray=0
+ * Desempate: maior valor percentual da métrica primária (primeira métrica)
+ */
+export const getWeeklyHighlights = (
+  users: User[],
+  entries: Record<string, WeeklyData[]>,
+  topN: number = 2
+): HighlightResult[] => {
+  const statusScore: Record<string, number> = {
+    green: 3,
+    yellow: 2,
+    red: 1,
+    gray: 0,
+  };
+
+  const scored = users.map(user => {
+    const userEntries = entries[user.id] || [];
+    const statuses = user.metrics.map(metric => {
+      const { value, status } = calculateMetricStatus(metric, userEntries);
+      return { metricId: metric.id, status, value };
+    });
+
+    const score = statuses.reduce((sum, s) => sum + (statusScore[s.status] || 0), 0);
+    const primaryValue = statuses.length > 0 ? statuses[0].value : 0;
+
+    return { user, score, primaryValue, statuses };
+  });
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.primaryValue - a.primaryValue;
+  });
+
+  return scored.slice(0, topN);
+};

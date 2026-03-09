@@ -56,9 +56,19 @@ export interface User {
   password_changed?: boolean;
 }
 
+export interface QuarterInfo {
+  startDate: string;
+  endDate: string;
+  totalWeeks: number;
+  currentWeek: number;
+  progressPercent: number;
+  isActive: boolean;
+}
+
 export interface AppState {
   users: User[];
   entries: Record<string, WeeklyData[]>; // userId -> data
   feedback: Record<string, Feedback[]>; // userId -> feedback
   currentWeek: number;
+  quarterInfo: QuarterInfo;
 }

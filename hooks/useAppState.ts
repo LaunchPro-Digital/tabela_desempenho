@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AppState, User, UserRole, Feedback } from '../types';
 import { supabase } from '../supabaseClient';
 import { INITIAL_STATE } from '../constants';
+import { getQuarterInfo, DEFAULT_QUARTER_CONFIG, QuarterConfig } from '../services/quarterUtils';
 
 interface UseAppStateOptions {
   enabled?: boolean;
@@ -38,7 +39,7 @@ export const useAppState = (enabledOrOptions: boolean | UseAppStateOptions = tru
         supabase.from('app_users').select('*').order('name'),
         entriesQuery,
         feedbackQuery,
-        supabase.from('app_config').select('value').eq('key', 'current_week').single(),
+        supabase.from('app_config').select('key, value').in('key', ['current_week', 'quarter_start', 'quarter_end']),
       ]);
 
       const { data: usersData, error: usersError } = usersResult;
@@ -88,14 +89,28 @@ export const useAppState = (enabledOrOptions: boolean | UseAppStateOptions = tru
 
       const { data: configData } = configResult;
 
-      const currentWeek = configData ? Number(configData.value) : INITIAL_STATE.currentWeek;
+      // Build config map from all app_config rows
+      const configMap: Record<string, string> = {};
+      (configData || []).forEach((row: { key: string; value: string }) => {
+        configMap[row.key] = row.value;
+      });
+
+      // Calculate quarter info from saved dates or defaults
+      const quarterConfig: QuarterConfig = {
+        startDate: configMap['quarter_start'] || DEFAULT_QUARTER_CONFIG.startDate,
+        endDate: configMap['quarter_end'] || DEFAULT_QUARTER_CONFIG.endDate,
+      };
+      const quarterInfo = getQuarterInfo(quarterConfig);
+
+      // Use auto-calculated current week from quarter dates
+      const currentWeek = quarterInfo.currentWeek;
 
       // Se não há usuários no banco ainda, semeia com os dados iniciais
       if (users.length === 0) {
         await seedInitialData(INITIAL_STATE);
         setAppState(INITIAL_STATE);
       } else {
-        setAppState({ users, entries, feedback, currentWeek });
+        setAppState({ users, entries, feedback, currentWeek, quarterInfo });
       }
     } catch (err) {
       console.error('Erro ao carregar estado:', err);
@@ -256,11 +271,40 @@ export const useAppState = (enabledOrOptions: boolean | UseAppStateOptions = tru
     if (error) console.error('Erro ao atualizar usuários:', error);
   }, []);
 
+  const saveQuarterConfig = useCallback(async (startDate: string, endDate: string) => {
+    // Upsert quarter_start and quarter_end in app_config
+    const { error: startError } = await supabase
+      .from('app_config')
+      .upsert({ key: 'quarter_start', value: startDate }, { onConflict: 'key' });
+
+    const { error: endError } = await supabase
+      .from('app_config')
+      .upsert({ key: 'quarter_end', value: endDate }, { onConflict: 'key' });
+
+    if (startError) console.error('Erro ao salvar quarter_start:', startError);
+    if (endError) console.error('Erro ao salvar quarter_end:', endError);
+
+    // Recalculate and update state
+    const newQuarterInfo = getQuarterInfo({ startDate, endDate });
+
+    // Also update the legacy current_week key for backward compat
+    await supabase
+      .from('app_config')
+      .upsert({ key: 'current_week', value: String(newQuarterInfo.currentWeek) }, { onConflict: 'key' });
+
+    setAppState(prev => ({
+      ...prev,
+      currentWeek: newQuarterInfo.currentWeek,
+      quarterInfo: newQuarterInfo,
+    }));
+  }, []);
+
   return {
     appState,
     loading,
     updateEntry,
     saveFeedback,
     updateUsers,
+    saveQuarterConfig,
   };
 };

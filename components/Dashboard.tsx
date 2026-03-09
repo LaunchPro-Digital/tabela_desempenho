@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, Suspense } from 'react';
 import { User, AppState, UserRole, Metric, Feedback } from '../types';
 import { calculateMetricStatus, getStatusColor, calculateWeeklyValue, getWeeklyHighlights } from '../services/calculator';
 import { Users, PlayCircle, Settings, Edit3, Moon, Sun, MessageSquare, ExternalLink, Clock } from 'lucide-react';
@@ -12,19 +12,25 @@ interface DashboardProps {
   onUpdateEntry: (userId: string, week: number, metricId: string, inputs: any) => void;
   onUpdateUsers: (users: User[]) => void;
   onSaveFeedback: (userId: string, feedback: Feedback) => void;
+  onSaveQuarterConfig: (startDate: string, endDate: string) => Promise<void>;
   onThemeToggle: () => void;
   isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, onUpdateEntry, onUpdateUsers, onSaveFeedback, onThemeToggle, isDarkMode }) => {
+const SettingsPanel = React.lazy(() => import('./SettingsPanel'));
+
+const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, onUpdateEntry, onUpdateUsers, onSaveFeedback, onSaveQuarterConfig, onThemeToggle, isDarkMode }) => {
   const [selectedUserFor1on1, setSelectedUserFor1on1] = useState<User | null>(null);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [editingCell, setEditingCell] = useState<{userId: string, week: number, metric: Metric, currentInputs: any} | null>(null);
   const [editForm, setEditForm] = useState<any>({});
 
+  const totalWeeks = appState.quarterInfo?.totalWeeks || 13;
+
   const weeklyHighlights = useMemo(
-    () => getWeeklyHighlights(appState.users, appState.entries, 2),
-    [appState.users, appState.entries]
+    () => getWeeklyHighlights(appState.users, appState.entries, 2, totalWeeks),
+    [appState.users, appState.entries, totalWeeks]
   );
 
   // Helper to get inputs safely
@@ -80,6 +86,16 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
 
   return (
     <div className="min-h-screen bg-brand-offWhite dark:bg-brand-darkBg relative transition-colors duration-300">
+      {/* Settings Panel Overlay */}
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsPanel
+            quarterInfo={appState.quarterInfo}
+            onSaveQuarterConfig={onSaveQuarterConfig}
+            onClose={() => setShowSettings(false)}
+          />
+        </Suspense>
+      )}
       {/* Top Navigation */}
       <nav className="bg-white dark:bg-brand-darkCard px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm border-b border-gray-100 dark:border-brand-darkBorder transition-colors">
         <div className="flex items-center gap-3">
@@ -101,16 +117,24 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
             </button>
 
             {currentUser.role === UserRole.PARTNER && (
+                <>
                 <button
                     onClick={() => setShowAdminPanel(true)}
                     className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-brand-grey dark:text-slate-300 hover:text-brand-black dark:hover:text-white p-2.5 md:px-4 md:py-2 rounded-lg text-sm font-bold transition-colors min-h-[44px] min-w-[44px] justify-center"
                 >
-                    <Settings size={18} /> <span className="hidden md:inline">Gestão do Time</span>
+                    <Users size={18} /> <span className="hidden md:inline">Gestão do Time</span>
                 </button>
+                <button
+                    onClick={() => setShowSettings(true)}
+                    className="flex items-center gap-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-brand-grey dark:text-slate-300 hover:text-brand-black dark:hover:text-white p-2.5 md:px-4 md:py-2 rounded-lg text-sm font-bold transition-colors min-h-[44px] min-w-[44px] justify-center"
+                >
+                    <Settings size={18} /> <span className="hidden md:inline">Config</span>
+                </button>
+                </>
             )}
             <div className="text-right hidden sm:block">
                 <p className="text-sm font-bold text-brand-black dark:text-white">{currentUser.name}</p>
-                <p className="text-xs text-brand-grey dark:text-slate-400">Semana {appState.currentWeek}</p>
+                <p className="text-xs text-brand-grey dark:text-slate-400">Semana {appState.currentWeek}/{totalWeeks}</p>
             </div>
             <img src={currentUser.avatar} alt="Me" loading="lazy" className="w-10 h-10 rounded-full border-2 border-white dark:border-brand-darkBorder shadow-md" />
             <button onClick={onLogout} className="text-sm font-bold text-brand-grey dark:text-slate-400 hover:text-red-500 transition-colors ml-2 min-h-[44px] px-2">Sair</button>
@@ -163,7 +187,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                         </div>
                         <div className="space-y-3">
                             {user.metrics.map(metric => {
-                                const stats = calculateMetricStatus(metric, userEntries);
+                                const stats = calculateMetricStatus(metric, userEntries, totalWeeks);
                                 return (
                                     <div key={metric.id} className="flex items-center justify-between py-2 border-t border-gray-50 dark:border-slate-800 first:border-0 first:pt-0">
                                         <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -193,7 +217,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                             <th className="px-4 py-5 text-center">Meta</th>
                             <th className="px-4 py-5 text-center">Unid.</th>
                             {/* Render Weeks 1-13 Columns */}
-                            {Array.from({length: 13}, (_, i) => i + 1).map(week => (
+                            {Array.from({length: totalWeeks}, (_, i) => i + 1).map(week => (
                                 <th key={week} className={`px-2 py-5 text-center w-14 ${week === appState.currentWeek ? 'bg-brand-purple/5 dark:bg-brand-purple/10 text-brand-purple border-b-2 border-brand-purple' : ''}`}>S{week}</th>
                             ))}
                             <th className="px-4 py-5 text-center w-28 sticky right-0 bg-gray-50 dark:bg-brand-darkCard z-10">Farol</th>
@@ -205,8 +229,8 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                             <React.Fragment key={user.id}>
                                 {user.metrics.map((metric, idx) => {
                                     const userEntries = appState.entries[user.id] || [];
-                                    const stats = calculateMetricStatus(metric, userEntries);
-                                    
+                                    const stats = calculateMetricStatus(metric, userEntries, totalWeeks);
+
                                     return (
                                         <tr key={metric.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors group">
                                             <td className="px-6 py-4 sticky left-0 bg-white dark:bg-brand-darkCard group-hover:bg-gray-50 dark:group-hover:bg-brand-darkCard transition-colors border-r border-transparent group-hover:border-gray-100 dark:group-hover:border-brand-darkBorder">
@@ -226,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ appState, onLogout, currentUser, 
                                             </td>
                                             
                                             {/* Weekly Data Cells */}
-                                            {Array.from({length: 13}, (_, i) => i + 1).map(week => {
+                                            {Array.from({length: totalWeeks}, (_, i) => i + 1).map(week => {
                                                 const entry = userEntries.find(e => e.week === week && e.inputs.metricId === metric.id);
                                                 let displayVal = '-';
                                                 

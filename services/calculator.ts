@@ -34,7 +34,7 @@ export const calculateWeeklyValue = (metric: Metric, entry: WeeklyData): number 
     }
 };
 
-export const calculateMetricStatus = (metric: Metric, entries: WeeklyData[]) => {
+export const calculateMetricStatus = (metric: Metric, entries: WeeklyData[], totalWeeks: number = 13) => {
   // Filter entries for this specific metric
   const metricEntries = entries.filter(e => e.inputs.metricId === metric.id);
 
@@ -102,10 +102,10 @@ export const calculateMetricStatus = (metric: Metric, entries: WeeklyData[]) => 
      else status = 'red';
   } else if (metric.type === MetricType.SUM_TARGET) {
       // Logic: Are we on track given the current week?
-      // Ideal pace: Target / 13 weeks.
-      // Current expected: (Target / 13) * max_week_recorded
+      // Ideal pace: Target / totalWeeks.
+      // Current expected: (Target / totalWeeks) * max_week_recorded
       const maxWeek = Math.max(...metricEntries.map(e => e.week), 1);
-      const expectedProgress = (metric.targetValue / 13) * maxWeek;
+      const expectedProgress = (metric.targetValue / totalWeeks) * maxWeek;
       
       if (calculatedValue >= expectedProgress * 0.9) status = 'green';
       else if (calculatedValue >= expectedProgress * 0.7) status = 'yellow';
@@ -144,7 +144,8 @@ export interface HighlightResult {
 export const getWeeklyHighlights = (
   users: User[],
   entries: Record<string, WeeklyData[]>,
-  topN: number = 2
+  topN: number = 2,
+  totalWeeks: number = 13
 ): HighlightResult[] => {
   const statusScore: Record<string, number> = {
     green: 3,
@@ -156,7 +157,7 @@ export const getWeeklyHighlights = (
   const scored = users.map(user => {
     const userEntries = entries[user.id] || [];
     const statuses = user.metrics.map(metric => {
-      const { value, status } = calculateMetricStatus(metric, userEntries);
+      const { value, status } = calculateMetricStatus(metric, userEntries, totalWeeks);
       return { metricId: metric.id, status, value };
     });
 

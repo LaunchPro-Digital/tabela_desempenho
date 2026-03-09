@@ -1,6 +1,7 @@
 import { AppState, MetricType, User, UserRole } from './types';
+import { DEFAULT_QUARTER_CONFIG, getQuarterInfo } from './services/quarterUtils';
 
-export const INITIAL_WEEK = 4; // Simulating we are in week 4
+const defaultQuarterInfo = getQuarterInfo(DEFAULT_QUARTER_CONFIG);
 
 export const MOCK_USERS: User[] = [
   {
@@ -192,5 +193,6 @@ export const INITIAL_STATE: AppState = {
   users: MOCK_USERS,
   entries: {},
   feedback: {},
-  currentWeek: INITIAL_WEEK
+  currentWeek: defaultQuarterInfo.currentWeek,
+  quarterInfo: defaultQuarterInfo,
 };

@@ -26,6 +26,7 @@ const App: React.FC = () => {
     updateEntry,
     saveFeedback,
     updateUsers,
+    saveQuarterConfig,
   } = useAppState({
     enabled: isAuthenticated,
     userId: user?.id,
@@ -324,6 +325,7 @@ const App: React.FC = () => {
               onUpdateEntry={handleUpdateEntry}
               onUpdateUsers={handleUpdateUsers}
               onSaveFeedback={handleSaveFeedback}
+              onSaveQuarterConfig={saveQuarterConfig}
               onThemeToggle={toggleTheme}
               isDarkMode={isDarkMode}
           />
